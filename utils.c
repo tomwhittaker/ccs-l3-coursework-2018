@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include "utils.h"
+#include <gmodule.h>
 
 
 #ifdef _MSC_VER
@@ -72,6 +73,75 @@ void alloc_sparse(int m, int n, int NZ, COO *sparse)
     *sparse = sp;
 }
 
+void get_values_and_coords(const CSR sparse, struct coord *coords, double *data){
+    int NZ;
+    NZ = sparse->NZ;
+    int n;
+    int counter;
+    int row = 0;
+    counter = 0;
+
+    for (n=0; n<NZ;n++){
+        while (counter >= sparse->IA[row+1]){
+            row++;
+        }
+        data[n] = sparse->A[n];
+        coords[n].i = sparse->JA[n];
+        coords[n].j = row;
+        counter++;
+    }
+}
+
+void alloc_sparseCSR(int m, int n, int NZ, CSR *sparse)
+{
+    CSR sp = calloc(1, sizeof(struct _p_CSR));
+    sp->m = m;
+    sp->n = n;
+    sp->NZ = NZ;
+    sp->A = calloc(NZ, sizeof(double));
+    sp->IA = calloc(m+1, sizeof(int));
+    sp->JA = calloc(NZ, sizeof(int));
+    *sparse = sp;
+}
+
+//TODO Combine all into single function so fewer for loops
+void get_IA_from_sorted_COO(const COO sparse, int *IA)
+{
+    int size;
+    size = sparse->NZ;
+    size = size + 1;
+    int n;
+    int acc;
+    IA[0]=0;
+    for (n = 0; n < sparse->NZ; n++) {
+        int j = sparse->coords[n].j;
+        IA[j+1] = IA[j+1] + 1;
+    }
+    for (n = 1; n < size; n++) {
+        IA[n] = IA[n] + IA[n-1];
+    }
+}
+
+void get_A_from_sorted_COO(const COO sparse, double *A)
+{
+    int n;
+    int i, j;
+    int counter;
+    counter = 0;
+    for (n = 0; n < sparse->NZ; n++) {
+        double data = sparse->data[n];
+        A[counter] = data;
+        counter = counter + 1;
+    }
+}
+
+void get_JA_from_sorted_C00(const COO sparse, int *JA){
+    int n = 0;
+    for (n=0; n<sparse->NZ; n++){
+        JA[n] = sparse->coords[n].i;
+    }
+}
+
 /*
  * Free a sparse matrix.
  * sparse - sparse matrix, may be NULL
@@ -87,6 +157,238 @@ void free_sparse(COO *sparse)
     free(sp);
     *sparse = NULL;
 }
+
+void free_sparseCSR(CSR *sparse)
+{
+    CSR sp = *sparse;
+    if (!sp) {
+        return;
+    }
+    free(sp->A);
+    free(sp->IA);
+    free(sp->JA);
+    free(sp);
+    *sparse = NULL;
+}
+
+// void sort_COO(const COO sparse, COO *sparseSorted){
+//     COO sp;
+//     alloc_sparse(sparse->m, sparse->n, sparse->NZ, &sp)
+//     int i;
+//     for (i=0;i<sp->NZ;i++){
+//         sp->coords.i = sparse->coords.j
+//         sp->coords.j = sparse->coords.i
+//     }
+
+// }
+
+void multiply_CSRVector(const CSR A, const double * B, double *result){
+    int counter;
+    int check;
+    counter = 1;
+    check = A->IA[counter];
+    for (int x = 0; x<3;x++){
+        result[x]=0;
+    }
+    for (int x = 0; x<A->NZ; x++){
+        if (x == check){
+            counter++;
+            check = A->IA[counter];
+        }
+        result[counter-1] = result[counter-1] + A->A[x] * B[A->JA[x]];
+    }
+
+}
+
+void multiply_CSR_CSR_to_COO(const CSR A, const CSR B){
+    // COO sp;
+    // alloc_sparse(A->m, B->n, A->m*B->n , &sp);
+    
+
+    // for (int i = 0; i< A->m*B->n ; i++){
+    //     sp->values[i] = 0
+    // }
+    double *dense;
+    alloc_dense(A->m,B->n,&dense);
+    zero_dense(A->m,B->n,dense);
+    double *row;
+
+    int counter = 0;
+    int counter2 = 0;
+    int rA = 0;
+    int numberInRowA;
+    for (int cA = 0; cA<A->NZ; cA++){
+        // if (cA >= A->IA[rA+1]){
+
+        // }
+        //Go through add to correct place in AI and add to array of array for both IA and JA and dealloc mem here so free for other threads
+
+        //Maybe chance outer loop to go through IA and then do a for loop for each in that row. 
+        // Means easy parallel also asymtopically the same??? as O(numRows * lengthRows) == O(length A)
+        while (cA >= A->IA[rA+1]){
+            rA++;
+        }
+        int colA = A->JA[cA];
+        int rB = 0;
+        for (int cB = 0; cB<B->NZ; cB++){
+            while (cB >= B->IA[rB+1]){
+                rB++;
+            }
+            int colB = B->JA[cB];
+            counter2++;
+            if (colA ==  rB){
+                counter ++;
+                dense[rA*A->m + colB] += A->A[cA] * B->A[cB];
+            }
+        }
+        
+    }
+    for (int x=0; x<A->m; x++){
+        for (int y=0; y<B->n; y++){
+            printf("%.2f ", dense[x*A->m+y]);
+        }
+        printf("\n");
+    }
+    int expect = A->m * A->m * B->n;
+    printf("Expected: %d -> Improved: %d\n", expect,counter );
+    printf("Hit: %d \n", counter2 );
+
+}
+
+void multiply_CSR_CSR_to_COO2(const CSR A, const CSR B){
+    // COO sp;
+    // alloc_sparse(A->m, B->n, A->m*B->n , &sp);
+    
+
+    // for (int i = 0; i< A->m*B->n ; i++){
+    //     sp->values[i] = 0
+    // }
+    double *dense;
+    alloc_dense(A->m,B->n,&dense);
+    zero_dense(A->m,B->n,dense);
+    double *row;
+
+    int counter = 0;
+    int counter2 = 0;
+    int rA = 0;
+    int numberInRowA;
+    for (int rA = 0; rA<A->m; rA++){
+        
+        // if (cA >= A->IA[rA+1]){
+        for (int cA = A->IA[rA]; cA<A->IA[rA+1]; cA++){
+            
+            int colA = A->JA[cA];
+            for (int cB = B->IA[colA]; cB<B->IA[colA+1]; cB++){
+                counter2++;
+                int colB = B->JA[cB];
+                counter ++;
+                dense[rA*A->m + colB] += A->A[cA] * B->A[cB];
+                //Maybe need to add if statement back 
+            }
+        }
+        // }/for (int cA = 0; cA<A->NZ; cA++){
+        //Go through add to correct place in AI and add to array of array for both IA and JA and dealloc mem here so free for other threads
+
+        //Maybe chance outer loop to go through IA and then do a for loop for each in that row. 
+        // Means easy parallel also asymtopically the same??? as O(numRows * lengthRows) == O(length A)
+    }
+    for (int x=0; x<A->m; x++){
+        for (int y=0; y<B->n; y++){
+            printf("%.2f ", dense[x*A->m+y]);
+        }
+        printf("\n");
+    }
+    int expect = A->m * A->m * B->n;
+    printf("Expected: %d -> Improved: %d\n", expect,counter );
+    printf("Hit: %d \n", counter2 );
+
+}
+
+void multiply_CSR_CSR_to_COO3(const CSR A, const CSR B){
+    // COO sp;
+    // alloc_sparse(A->m, B->n, A->m*B->n , &sp);
+    
+
+    // for (int i = 0; i< A->m*B->n ; i++){
+    //     sp->values[i] = 0
+    // }
+    int counter = 0;
+    int counter2 = 0;
+    int rA = 0;
+    int numberInRowA;
+    int IARes[A->m+1];
+
+    IARes[0]=0;
+    for (int rA = 0; rA<A->m; rA++){
+        IARes[rA+1]=IARes[rA];
+        // if (cA >= A->IA[rA+1]){
+        for (int cA = A->IA[rA]; cA<A->IA[rA+1]; cA++){
+            
+            int colA = A->JA[cA];
+            for (int cB = B->IA[colA]; cB<B->IA[colA+1]; cB++){
+                counter2++;
+                int colB = B->JA[cB];
+                counter ++;
+                IARes[rA+1] += 1;
+                //Maybe need to add if statement back 
+            }
+        }
+        // }/for (int cA = 0; cA<A->NZ; cA++){
+        //Go through add to correct place in AI and add to array of array for both IA and JA and dealloc mem here so free for other threads
+
+        //Maybe chance outer loop to go through IA and then do a for loop for each in that row. 
+        // Means easy parallel also asymtopically the same??? as O(numRows * lengthRows) == O(length A)
+    }
+    int JARes[IARes[A->m]];
+    int ARes[IARes[A->m]];
+    for (int rA = 0; rA<A->m; rA++){
+        int row[B->n];
+        for (int i=0; i<B->n;i++){
+            row[i] = 0;
+        }
+        // if (cA >= A->IA[rA+1]){
+        for (int cA = A->IA[rA]; cA<A->IA[rA+1]; cA++){
+            int colA = A->JA[cA];
+            for (int cB = B->IA[colA]; cB<B->IA[colA+1]; cB++){
+                counter2++;
+                int colB = B->JA[cB];
+                counter ++;
+                row[colB] += A->A[cA] * B->A[cB];
+                //Maybe need to add if statement back 
+            }
+        }
+        int count = 0;
+        for (int i=0; i<B->n;i++){
+            if (row[i] !=0 ){
+                JARes[IARes[rA]+count]=i;
+                ARes[IARes[rA]+count]=row[i];
+                count++;
+            }
+        }
+    }
+    printf("A:\n");
+    for (int i = 0; i<IARes[A->m];i++){
+        printf("%d ", ARes[i]);
+    }
+    printf("\n");
+    printf("IA:\n");
+    for (int i = 0; i<A->m+1;i++){
+        printf("%d ", IARes[i]);
+    }
+    printf("\n");
+    printf("JA:\n");
+    for (int i = 0; i<IARes[A->m];i++){
+        printf("%d ", JARes[i]);
+    }
+    printf("\n");
+    int expect = A->m * A->m * B->n;
+    printf("Expected: %d -> Improved: %d\n", expect,counter );
+    printf("Hit: %d \n", counter2 );
+
+}
+
+
+
 
 /*
  * Convert a sparse matrix to dense format in column major format.
@@ -107,6 +409,53 @@ void convert_sparse_to_dense(const COO sparse, double **dense)
     }
 }
 
+void convert_sparse_to_CSR(const COO I, CSR *sparse)
+{
+    CSR sp;
+    alloc_sparseCSR(I->m, I->n, I->NZ, &sp);
+    get_A_from_sorted_COO(I, sp->A);
+    get_IA_from_sorted_COO(I, sp->IA);
+    get_JA_from_sorted_C00(I, sp->JA);
+    *sparse = sp;
+}
+
+void convert_CSR_to_sparse(const CSR I, COO *sparse)
+{
+    COO sp;
+    alloc_sparse(I->m, I->n, I->NZ, &sp);
+    get_values_and_coords(I,sp->coords,sp->data);
+    *sparse = sp;
+}
+
+void print_CSR(const CSR I){
+    int NZ;
+    NZ = I->NZ;
+    double *A;
+    int *IA;
+    int *JA;
+    A = I->A;
+    IA = I->IA;
+    JA = I->JA;
+
+    printf("A\n");
+    int n;
+    for (n=0; n< NZ; n++){
+        printf("%.2f,", A[n]);
+    }
+    printf("\n");
+
+    printf("IA\n");
+    for (n=0; n<= NZ; n++){
+        printf("%d,", IA[n]);
+    }
+    printf("\n");
+
+    printf("JA\n");
+    for (n=0; n< NZ; n++){
+        printf("%d,", JA[n]);
+    }
+    printf("\n");
+}
 /*
  * Convert a dense matrix in column major format to sparse.
  * Entries with absolute value < 1e-15 are flushed to zero and not

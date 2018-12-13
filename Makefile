@@ -1,4 +1,4 @@
-CFLAGS = -O3 -march=native  -D_GNU_SOURCE
+CFLAGS = -O3 -march=native  -D_GNU_SOURCE `pkg-config --cflags --libs glib-2.0`
 LDFLAGS = -lm
 CC = gcc
 
@@ -22,6 +22,9 @@ check: sparsemm
 	./sparsemm CHECK
 
 sparsemm: sparsemm.c $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $< $(OBJ) $(LDFLAGS)
+
+test: test.c $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $< $(OBJ) $(LDFLAGS)
 
 %.o: %.c $(HEADER)
