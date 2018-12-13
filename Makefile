@@ -1,4 +1,4 @@
-CFLAGS = -O3 -march=native  -D_GNU_SOURCE `pkg-config --cflags --libs glib-2.0`
+CFLAGS = -O3 -march=native -std=c11 -D_GNU_SOURCE `pkg-config --cflags --libs glib-2.0`
 LDFLAGS = -lm
 CC = gcc
 
