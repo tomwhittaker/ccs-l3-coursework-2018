@@ -355,7 +355,6 @@ void multiply_CSR_CSR_to_COO3(const CSR A, const CSR B, CSR *out){
         for (int cA = A->IA[rA]; cA<A->IA[rA+1]; cA++){
             int colA = A->JA[cA];
             for (int cB = B->IA[colA]; cB<B->IA[colA+1]; cB++){
-                printf("nonZero");
                 counter2++;
                 int colB = B->JA[cB];
                 counter ++;
