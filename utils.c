@@ -86,8 +86,8 @@ void get_values_and_coords(const CSR sparse, struct coord *coords, double *data)
             row++;
         }
         data[n] = sparse->A[n];
-        coords[n].i = sparse->JA[n];
-        coords[n].j = row;
+        coords[n].j = sparse->JA[n];
+        coords[n].i = row;
         counter++;
     }
 }
@@ -108,14 +108,14 @@ void alloc_sparseCSR(int m, int n, int NZ, CSR *sparse)
 void get_IA_from_sorted_COO(const COO sparse, int *IA)
 {
     int size;
-    size = sparse->NZ;
+    size = sparse->m;
     size = size + 1;
     int n;
     int acc;
     IA[0]=0;
     for (n = 0; n < sparse->NZ; n++) {
-        int j = sparse->coords[n].j;
-        IA[j+1] = IA[j+1] + 1;
+        int i = sparse->coords[n].i;
+        IA[i+1] = IA[i+1] + 1;
     }
     for (n = 1; n < size; n++) {
         IA[n] = IA[n] + IA[n-1];
@@ -138,7 +138,7 @@ void get_A_from_sorted_COO(const COO sparse, double *A)
 void get_JA_from_sorted_C00(const COO sparse, int *JA){
     int n = 0;
     for (n=0; n<sparse->NZ; n++){
-        JA[n] = sparse->coords[n].i;
+        JA[n] = sparse->coords[n].j; //CHANGE: chaned from i to j
     }
 }
 
@@ -170,17 +170,6 @@ void free_sparseCSR(CSR *sparse)
     free(sp);
     *sparse = NULL;
 }
-
-// void sort_COO(const COO sparse, COO *sparseSorted){
-//     COO sp;
-//     alloc_sparse(sparse->m, sparse->n, sparse->NZ, &sp)
-//     int i;
-//     for (i=0;i<sp->NZ;i++){
-//         sp->coords.i = sparse->coords.j
-//         sp->coords.j = sparse->coords.i
-//     }
-
-// }
 
 void multiply_CSRVector(const CSR A, const double * B, double *result){
     int counter;
@@ -243,15 +232,15 @@ void multiply_CSR_CSR_to_COO(const CSR A, const CSR B){
         }
         
     }
-    for (int x=0; x<A->m; x++){
-        for (int y=0; y<B->n; y++){
-            printf("%.2f ", dense[x*A->m+y]);
-        }
-        printf("\n");
-    }
-    int expect = A->m * A->m * B->n;
-    printf("Expected: %d -> Improved: %d\n", expect,counter );
-    printf("Hit: %d \n", counter2 );
+    // for (int x=0; x<A->m; x++){
+    //     for (int y=0; y<B->n; y++){
+    //         printf("%.6f ", dense[x*A->m+y]);
+    //     }
+    //     printf("\n");
+    // }
+    // int expect = A->m * A->m * B->n;
+    // printf("Expected: %d -> Improved: %d\n", expect,counter );
+    // printf("Hit: %d \n", counter2 );
 
 }
 
@@ -282,6 +271,7 @@ void multiply_CSR_CSR_to_COO2(const CSR A, const CSR B){
                 counter2++;
                 int colB = B->JA[cB];
                 counter ++;
+                // printf("Hit :%d %d %d %d %.5f %.5f %.5f\n", rA, colA, colA, colB, A->A[cA],B->A[cB], A->A[cA] * B->A[cB]);
                 dense[rA*A->m + colB] += A->A[cA] * B->A[cB];
                 //Maybe need to add if statement back 
             }
@@ -292,19 +282,19 @@ void multiply_CSR_CSR_to_COO2(const CSR A, const CSR B){
         //Maybe chance outer loop to go through IA and then do a for loop for each in that row. 
         // Means easy parallel also asymtopically the same??? as O(numRows * lengthRows) == O(length A)
     }
-    for (int x=0; x<A->m; x++){
-        for (int y=0; y<B->n; y++){
-            printf("%.2f ", dense[x*A->m+y]);
-        }
-        printf("\n");
-    }
-    int expect = A->m * A->m * B->n;
-    printf("Expected: %d -> Improved: %d\n", expect,counter );
-    printf("Hit: %d \n", counter2 );
+    // for (int x=0; x<A->m; x++){
+    //     for (int y=0; y<B->n; y++){
+    //         printf("%.6f ", dense[x*A->m+y]);
+    //     }
+    //     printf("\n");
+    // }
+    // int expect = A->m * A->m * B->n;
+    // printf("Expected: %d -> Improved: %d\n", expect,counter );
+    // printf("Hit: %d \n", counter2 );
 
 }
 
-void multiply_CSR_CSR_to_COO3(const CSR A, const CSR B){
+void multiply_CSR_CSR_to_COO3(const CSR A, const CSR B, CSR *out){
     // COO sp;
     // alloc_sparse(A->m, B->n, A->m*B->n , &sp);
     
@@ -316,74 +306,148 @@ void multiply_CSR_CSR_to_COO3(const CSR A, const CSR B){
     int counter2 = 0;
     int rA = 0;
     int numberInRowA;
-    int IARes[A->m+1];
+    int *IA;
+    IA = calloc(A->m+1, sizeof(int));
+    // // printf("First Loop\n");
+    // printf("A\n");
+    // printf("A:\n");
+    // for (int i = 0; i<A->NZ;i++){
+    //     printf("%.6f ", A->A[i]);
+    // }
+    // printf("\n");
+    // printf("IA:\n");
+    // for (int i = 0; i<A->m+1;i++){
+    //     printf("%d ", A->IA[i]);
+    // }
+    // printf("\n");
+    // printf("JA:\n");
+    // for (int i = 0; i<A->NZ;i++){
+    //     printf("%d ", A->JA[i]);
+    // }
+    // printf("\n");
 
-    IARes[0]=0;
+    // printf("B\n");
+    // printf("A:\n");
+    // for (int i = 0; i<B->NZ;i++){
+    //     printf("%.6f ", B->A[i]);
+    // }
+    // printf("\n");
+    // printf("IA:\n");
+    // for (int i = 0; i<B->m+1;i++){
+    //     printf("%d ", B->IA[i]);
+    // }
+    // printf("\n");
+    // printf("JA:\n");
+    // for (int i = 0; i<B->NZ;i++){
+    //     printf("%d ", B->JA[i]);
+    // }
+    // printf("\n");
+
+
+
+    IA[0]=0;
     for (int rA = 0; rA<A->m; rA++){
-        IARes[rA+1]=IARes[rA];
+        IA[rA+1]=IA[rA];
+        int *colUsed;
+        colUsed = calloc(B->n, sizeof(int));
+        int countColUsed=0; 
         // if (cA >= A->IA[rA+1]){
         for (int cA = A->IA[rA]; cA<A->IA[rA+1]; cA++){
-            
             int colA = A->JA[cA];
             for (int cB = B->IA[colA]; cB<B->IA[colA+1]; cB++){
                 counter2++;
                 int colB = B->JA[cB];
                 counter ++;
-                IARes[rA+1] += 1;
+                int found = 0;
+                for (int i=0; i<countColUsed; i++){
+                    if (colUsed[i] == colB){
+                        found = 1;
+                    }
+                }
+                if (found == 0){
+                    IA[rA+1] += 1;
+                    colUsed[countColUsed] = colB;
+                    countColUsed++;
+                }
+                
+                
                 //Maybe need to add if statement back 
             }
         }
+        
         // }/for (int cA = 0; cA<A->NZ; cA++){
         //Go through add to correct place in AI and add to array of array for both IA and JA and dealloc mem here so free for other threads
 
         //Maybe chance outer loop to go through IA and then do a for loop for each in that row. 
         // Means easy parallel also asymtopically the same??? as O(numRows * lengthRows) == O(length A)
     }
-    int JARes[IARes[A->m]];
-    int ARes[IARes[A->m]];
+    // int sp->JA[IA[A->m]];
+    // int sp->A[IA[A->m]];
+
+    CSR sp;
+    alloc_sparseCSR(A->m,B->n, IA[A->m], &sp);
+    sp->IA = IA;
+    double *AR;
+    int *JA;
+    AR = calloc(IA[A->m], sizeof(double));
+    JA = calloc(IA[A->m], sizeof(int));
+    // printf("Second Loop\n");
+    // for (int cB = 0; cB<B->NZ; cB++){
+    //         printf("%d \n", B->JA[cB]);
+    //     }
     for (int rA = 0; rA<A->m; rA++){
-        int row[B->n];
+        double row[B->n];
         for (int i=0; i<B->n;i++){
             row[i] = 0;
         }
+        
         // if (cA >= A->IA[rA+1]){
         for (int cA = A->IA[rA]; cA<A->IA[rA+1]; cA++){
+            // printf("Row of A%d\n", rA);
             int colA = A->JA[cA];
+            
             for (int cB = B->IA[colA]; cB<B->IA[colA+1]; cB++){
+                // printf("Column of A %d\n", colA);
                 counter2++;
                 int colB = B->JA[cB];
+                // printf("Column of B %d from %d at %.2f \n", colB, cB,A->A[cA] * B->A[cB]);
                 counter ++;
+                // if (A->A[cA] * B->A[cB] == 0){
+                //     printf("Error: %d %d\n", cA, cB);
+                // }
                 row[colB] += A->A[cA] * B->A[cB];
-                //Maybe need to add if statement back 
             }
         }
         int count = 0;
         for (int i=0; i<B->n;i++){
             if (row[i] !=0 ){
-                JARes[IARes[rA]+count]=i;
-                ARes[IARes[rA]+count]=row[i];
+                JA[IA[rA]+count]=i;
+                AR[IA[rA]+count]=row[i];
                 count++;
             }
         }
     }
-    printf("A:\n");
-    for (int i = 0; i<IARes[A->m];i++){
-        printf("%d ", ARes[i]);
-    }
-    printf("\n");
-    printf("IA:\n");
-    for (int i = 0; i<A->m+1;i++){
-        printf("%d ", IARes[i]);
-    }
-    printf("\n");
-    printf("JA:\n");
-    for (int i = 0; i<IARes[A->m];i++){
-        printf("%d ", JARes[i]);
-    }
-    printf("\n");
+    sp->A = AR;
+    sp->JA = JA;
+    // printf("A:\n");
+    // for (int i = 0; i<IA[A->m];i++){
+    //     printf("%.6f ", AR[i]);
+    // }
+    // printf("\n");
+    // printf("IA:\n");
+    // for (int i = 0; i<A->m+1;i++){
+    //     printf("%d ", sp->IA[i]);
+    // }
+    // printf("\n");
+    // printf("JA:\n");
+    // for (int i = 0; i<IA[A->m];i++){
+    //     printf("%d ", JA[i]);
+    // }
+    // printf("\n");
     int expect = A->m * A->m * B->n;
-    printf("Expected: %d -> Improved: %d\n", expect,counter );
-    printf("Hit: %d \n", counter2 );
+    // printf("Expected: %d -> Improved: %d\n", expect,counter );
+    // printf("Hit: %d \n", counter2 );
+    *out = sp;
 
 }
 
@@ -424,6 +488,9 @@ void convert_CSR_to_sparse(const CSR I, COO *sparse)
     COO sp;
     alloc_sparse(I->m, I->n, I->NZ, &sp);
     get_values_and_coords(I,sp->coords,sp->data);
+    // for (int i=0;i<sp->NZ; i++){
+        // printf("(%d %d) %.6f\n", sp->coords[i].i, sp->coords[i].j, sp->data[i]);
+    // }
     *sparse = sp;
 }
 

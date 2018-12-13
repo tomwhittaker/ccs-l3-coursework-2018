@@ -21,12 +21,21 @@ static int check_sparsemm()
     int i, j, m, n, k;
     int pass = 0;
 
-    m = 20;
-    k = 50;
-    n = 30;
+    m = 20; //20 10
+    k = 50; //50 5
+    n = 20; //30 10
     random_matrix(m, k, 0.1, &A);
+    printf("1\n");
+    // for (int i=0;i<A->NZ; i++){
+    //     printf("%d %d %.2f\n", A->coords[i].i, A->coords[i].j, A->data[i]);
+    // }
     random_matrix(k, n, 0.2, &B);
-
+    // printf("2\n");
+    // for (int i=0;i<B->NZ; i++){
+    //     printf("%d %d %.2f\n", B->coords[i].i, B->coords[i].j, B->data[i]);
+    // }
+    printf("NZ %d\n", A->NZ );
+    printf("NZ %d\n", B->NZ );
     basic_sparsemm(A, B, &Cbasic);
     optimised_sparsemm(A, B, &Copt);
 
