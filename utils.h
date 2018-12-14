@@ -54,6 +54,7 @@ void get_values_and_coords(const CSR, struct coord *, double *);
 void multiply_CSRVector(const CSR, const double * , double *);
 void multiply_CSR_CSR_to_COO2(const CSR, const CSR);
 void multiply_CSR_CSR_to_COO(const CSR, const CSR);
-void multiply_CSR_CSR_to_COO3(const CSR A, const CSR B, CSR *);
+void multiply_CSR_CSR_to_COO3(const CSR, const CSR, CSR *);
+void addition_of_three(const CSR, const CSR, const CSR, CSR *);
 
 #endif

@@ -429,6 +429,7 @@ void multiply_CSR_CSR_to_COO3(const CSR A, const CSR B, CSR *out){
     }
     sp->A = AR;
     sp->JA = JA;
+    *out = sp;
     // printf("A:\n");
     // for (int i = 0; i<IA[A->m];i++){
     //     printf("%.6f ", AR[i]);
@@ -444,10 +445,8 @@ void multiply_CSR_CSR_to_COO3(const CSR A, const CSR B, CSR *out){
     //     printf("%d ", JA[i]);
     // }
     // printf("\n");
-    int expect = A->m * A->m * B->n;
     // printf("Expected: %d -> Improved: %d\n", expect,counter );
     // printf("Hit: %d \n", counter2 );
-    *out = sp;
 
 }
 
@@ -492,6 +491,82 @@ void convert_CSR_to_sparse(const CSR I, COO *sparse)
         // printf("(%d %d) %.6f\n", sp->coords[i].i, sp->coords[i].j, sp->data[i]);
     // }
     *sparse = sp;
+}
+
+void addition_of_three(const CSR A, const CSR B, const CSR C, CSR *out){
+    int m = A->m;
+    int *IA;
+    IA = calloc(A->m+1, sizeof(int));
+    IA[0] = 0;
+    for (int r=0; r<m;r++){
+        IA[r+1]=IA[r];
+        int *row;
+        row = calloc(A->n+1, sizeof(double));
+
+
+        //A
+        for (int cA=A->IA[r]; cA<A->IA[r+1]; cA++){
+            row[A->JA[cA]] += 1;
+        }        
+
+        //B
+        for (int cB=B->IA[r]; cB<B->IA[r+1]; cB++){
+            row[B->JA[cB]] += 1;
+        }    
+
+        //C
+        for (int cC=C->IA[r]; cC<C->IA[r+1]; cC++){
+            row[C->JA[cC]] += 1;
+        }   
+        for (int i =0; i<A->n;i++){
+            if (row[i] != 0){
+                IA[r+1] += 1;
+            }
+        } 
+    }
+
+    CSR sp;
+    alloc_sparseCSR(A->m,B->n, IA[A->m], &sp);
+    sp->IA = IA;
+    double *AR;
+    int *JA;
+    AR = calloc(IA[A->m], sizeof(double));
+    JA = calloc(IA[A->m], sizeof(int));
+    for (int r=0; r<m;r++){
+        double *row;
+        row = calloc(A->n, sizeof(double));
+
+        for (int i =0; i<A->n;i++){
+            row[i]=0;
+        }
+
+        //A
+        for (int cA=A->IA[r]; cA<A->IA[r+1]; cA++){
+            row[A->JA[cA]] += A->A[cA];
+        }        
+
+        //B
+        for (int cB=B->IA[r]; cB<B->IA[r+1]; cB++){
+            row[B->JA[cB]] += B->A[cB];
+        }    
+
+        //C
+        for (int cC=C->IA[r]; cC<C->IA[r+1]; cC++){
+            row[C->JA[cC]] += C->A[cC];
+        } 
+        int count = 0;
+        for (int i =0; i<A->n;i++){
+            if (row[i] != 0){
+                AR[IA[r]+count] = row[i];
+                JA[IA[r]+count] = i;
+                count++;
+            }
+        }   
+    }
+    sp->A = AR;
+    sp->JA = JA;
+    *out = sp;
+
 }
 
 void print_CSR(const CSR I){
